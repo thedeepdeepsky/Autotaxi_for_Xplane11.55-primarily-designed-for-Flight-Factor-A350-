@@ -1,0 +1,21 @@
+/build/
+/build-*/
+/cmake-build-*/
+/.idea/
+
+# Local simulator/scenery inspection output
+*.dsf.txt
+*.dsf.text
+*.apt.dat
+*.log
+*.bak
+*.tmp
+/.cache/
+/scenery-cache/
+/vendor/BetterPushbackC/
+
+# IDE and local machine metadata
+*.user
+*.suo
+*.ninja_deps
+*.ninja_log
