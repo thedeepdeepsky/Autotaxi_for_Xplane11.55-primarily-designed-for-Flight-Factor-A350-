@@ -69,6 +69,10 @@ Override `AUTOTAXI_ZSPD_APT` with the path to that scenery, or an empty value to
 
 ## In X-Plane
 
+<img width="1080" height="720" alt="panel-1080" src="https://github.com/user-attachments/assets/e2155667-964e-456c-ac81-2904a6abfeb3" />
+<img width="2815" height="1741" alt="image" src="https://github.com/user-attachments/assets/24d4d18d-f82b-4aaa-b67f-a406e355790d" />
+
+
 1. Load the A350, prepare engines/hydraulics for taxi and remove chocks.
 2. Open **Plugins > FF A350 AutoTaxi > Open AutoTaxi**. Initial airport indexing runs
    in the background. The resizable window displays the departure stand or nearest node,
