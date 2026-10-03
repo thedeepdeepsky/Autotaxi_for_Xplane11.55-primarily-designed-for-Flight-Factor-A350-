@@ -3,7 +3,7 @@
 C++17 X-Plane plugin, initially configured for X-Plane 11 and FlightFactor A350 v1.6.16.
 Open this directory in CLion. The local SDK default is `D:/XPLANESDK`.
 
-**Supports OTHER AIRPLANE by adjusting .ini file**
+## **Supports OTHER AIRPLANE by adjusting .ini file**
 
 **Engine thrust is manual. AutoTaxi never changes throttle levers, engine thrust
 datarefs or `override_throttles`. Set a modest taxi thrust yourself; speed control
