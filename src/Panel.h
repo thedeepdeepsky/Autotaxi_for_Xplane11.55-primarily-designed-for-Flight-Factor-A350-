@@ -1,5 +1,5 @@
 #pragma once
-#include "TaxiController.h"
+#include "RouteTiming.h"
 #include <functional>
 #include <optional>
 #include <unordered_map>
@@ -14,12 +14,14 @@ struct Box {
     }
 };
 enum class DrawKind { Rectangle, Line, Triangle, Text };
+enum class TextStyle { Ui, AirportSign };
 struct DrawCommand {
     DrawKind kind;
     Box box;
     Color color;
     std::string text;
     double x2 = 0, y2 = 0, x3 = 0, y3 = 0, width = 1;
+    TextStyle textStyle = TextStyle::Ui;
 };
 enum class Action {
     None,
@@ -42,7 +44,20 @@ enum class Action {
     AirportMap,
     ZoomIn,
     ZoomOut,
-    Map
+    Map,
+    RouteOptions,
+    AllowOversteer,
+    RelaxPavement,
+    RelaxStand,
+    ToggleStandLabels,
+    ToggleAirportSigns,
+    GoNow,
+    ViaInput,
+    ApplyVia,
+    ClearVia,
+    PickVia,
+    UndoVia,
+    EmergencyBrake
 };
 struct Hit {
     Action action;
@@ -64,6 +79,14 @@ struct PanelState {
     std::optional<Route> route;
     AircraftState aircraft;
     ControlOutput output;
+    ControllerConfig controllerConfig;
+    std::optional<RouteTiming> timing;
+    std::vector<RoutePathPoint> predictedCockpitPath;
+    double predictionInvalidSeconds = 0;
+    RouteOptions routeOptions;
+    std::string viaText;
+    bool optionsOpen = false, viaFocus = false, pickVia = false, emergencyHeld = false;
+    bool showStandLabels = true, showAirportSigns = true;
     double actualSteer = 0, speedKnots = 10;
     int category = 0, selected = -1, scroll = 0;
     std::string query, status = "Detecting airport...";
@@ -82,11 +105,50 @@ struct PanelFrame {
     Box map, mapContent, list;
     double mapScale = 1;
     int visibleRows = 0;
+    std::size_t staticMapBegin = 0, staticMapEnd = 0;
+};
+struct MapDrawCache {
+    std::vector<DrawCommand> commands;
+    const Airport *airport = nullptr;
+    GeoPoint origin;
+    Vec2 center;
+    Box content{};
+    double scale = 0;
+    MapView view = MapView::Airport;
+    bool valid = false;
+    std::size_t rebuildCount = 0;
 };
 std::vector<int> filteredChoices(const PanelState &state);
-PanelFrame buildPanel(const PanelState &state, double width, double height, const MeasureText &measure);
+PanelFrame buildPanel(const PanelState &state, double width, double height, const MeasureText &measure,
+                      MapDrawCache *mapCache = nullptr, MeasureText signMeasure = {});
+class PanelFrameCache {
+  public:
+    const PanelFrame &get(const PanelState &state, double width, double height, const MeasureText &measure,
+                          MeasureText signMeasure = {});
+    void invalidate(bool airportChanged = false) {
+        dirty_ = true;
+        if (airportChanged)
+            mapCache_.valid = false;
+    }
+    std::size_t rebuildCount() const {
+        return rebuildCount_;
+    }
+    std::size_t mapRebuildCount() const {
+        return mapCache_.rebuildCount;
+    }
+
+  private:
+    PanelFrame frame_;
+    MapDrawCache mapCache_;
+    double width_ = 0, height_ = 0;
+    bool dirty_ = true;
+    std::size_t rebuildCount_ = 0;
+};
+std::size_t lineBatchEnd(const std::vector<DrawCommand> &commands, std::size_t begin);
 void fitAirport(PanelState &state);
 void fitMap(PanelState &state);
 void selectMapView(PanelState &state, MapView view);
 void setPanelRoute(PanelState &state, const Route &route);
+void resetPanelTiming(PanelState &state);
+void setPanelTiming(PanelState &state, RouteTiming timing, double elapsed = 1);
 } // namespace autotaxi

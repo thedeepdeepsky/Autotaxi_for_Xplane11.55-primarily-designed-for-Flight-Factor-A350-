@@ -32,6 +32,15 @@ bool validSegment(const PushbackSegment &s) {
            s.startHeading >= 0 && s.startHeading <= 360 && std::isfinite(s.endHeading) && s.endHeading >= 0 &&
            s.endHeading <= 360 && (s.type == 0 || (std::isfinite(s.radius) && s.radius > 0));
 }
+bool hasHalfCircleArc(const PushbackPlan &plan) {
+    // A tug can make a sequence of ordinary cornering arcs, but a single
+    // semicircle is a telltale sign that the generated route has entered a
+    // neighbouring stand and turned back out of it.
+    for (const auto &segment : plan.segments)
+        if (segment.type == 1 && std::abs(wrap180(segment.endHeading - segment.startHeading)) > 135.0)
+            return true;
+    return false;
+}
 bool makeSegments(const PavementQuery &pavement, const AircraftState &aircraft, Vec2 target,
                   double finalHeading, const ControllerConfig &settings, PushbackPlan &plan,
                   bool reverseConstruction = false) {
@@ -96,7 +105,7 @@ bool makeSegments(const PavementQuery &pavement, const AircraftState &aircraft, 
             plan.length += arc;
         }
     }
-    if (length(plan.points.back() - target) > 0.5 || plan.length > 450)
+    if (length(plan.points.back() - target) > 0.5 || plan.length > 450 || hasHalfCircleArc(plan))
         return false;
     // Segments are sampled at <= 2 m, denser than pavedConnection's 4 m probes.
     for (auto point : plan.points)
@@ -104,6 +113,36 @@ bool makeSegments(const PavementQuery &pavement, const AircraftState &aircraft, 
             return false;
     plan.segments.back().userPlaced = true;
     return true;
+}
+bool entersOtherStand(const Airport &airport, const AircraftState &aircraft, const PushbackPlan &plan) {
+    if (airport.ramps.size() < 2 || plan.points.empty())
+        return false;
+    int own = -1;
+    double ownDistance = std::numeric_limits<double>::infinity();
+    for (std::size_t i = 0; i < airport.ramps.size(); ++i) {
+        const double d = distance(airport.ramps[i].position, aircraft.position);
+        if (d < ownDistance) {
+            ownDistance = d;
+            own = static_cast<int>(i);
+        }
+    }
+    // A synthetic or incomplete apt.dat may not contain the current stand;
+    // in that case there is no reliable foreign-stand exclusion to apply.
+    if (own < 0 || ownDistance > 45.0)
+        return false;
+    for (std::size_t i = 0; i < airport.ramps.size(); ++i) {
+        if (static_cast<int>(i) == own)
+            continue;
+        double closest = std::numeric_limits<double>::infinity();
+        for (const auto &point : plan.points)
+            closest = std::min(closest, distance(airport.ramps[i].position, unproject(plan.origin, point)));
+        // Keep the tug clear of a neighbouring stand stop/lead-in.  The
+        // clearance is deliberately smaller than a typical taxiway width so
+        // a nearby parallel centreline remains usable.
+        if (closest < 14.0)
+            return true;
+    }
+    return false;
 }
 bool reverseLeg(const PavementQuery &pavement, const AircraftState &aircraft, Vec2 target, double yaw,
                 const ControllerConfig &settings, PushbackPlan &plan) {
@@ -113,13 +152,14 @@ bool reverseLeg(const PavementQuery &pavement, const AircraftState &aircraft, Ve
     return makeSegments(pavement, aircraft, target, yaw, settings, plan, true);
 }
 std::vector<PushbackPlan> apronDetours(const PavementQuery &pavement, const AircraftState &aircraft,
-                                       const ControllerConfig &settings) {
+                                       const ControllerConfig &settings, const RouteOptions &options) {
     std::vector<PushbackPlan> detours;
     Vec2 forward = direction(aircraft.trueHeading), side{forward.y, -forward.x};
     Vec2 start = forward * -settings.mainAxleAft;
     for (double back : {40., 80., 120.})
         for (double lateral : {0., -60., 60., -100., 100.})
             for (double turn : {0., -60., 60., -90., 90., -120., 120., 180.}) {
+                checkPlanning(options);
                 Vec2 target = start - forward * back + side * lateral;
                 PushbackPlan leg;
                 if (reverseLeg(pavement, aircraft, target, normalHeading(aircraft.trueHeading + turn),
@@ -131,11 +171,12 @@ std::vector<PushbackPlan> apronDetours(const PavementQuery &pavement, const Airc
     return detours;
 }
 bool viaDetour(const PavementQuery &pavement, const AircraftState &aircraft, Vec2 target, double yaw,
-               const ControllerConfig &settings, const std::vector<PushbackPlan> &detours,
-               PushbackPlan &plan) {
+               const ControllerConfig &settings, const std::vector<PushbackPlan> &detours, PushbackPlan &plan,
+               const RouteOptions &options) {
     double shortest = 450;
     bool found = false;
     for (const auto &first : detours) {
+        checkPlanning(options);
         if (first.length + length(target - first.points.back()) >= shortest)
             continue;
         double midYaw = first.segments.back().endHeading;
@@ -162,11 +203,21 @@ bool viaDetour(const PavementQuery &pavement, const AircraftState &aircraft, Vec
 PushbackPlan planPushback(const Airport &airport, const AircraftState &aircraft,
                           const Destination &destination, const RouteOptions &options,
                           const ControllerConfig &controller) {
+    checkPlanning(options);
     std::vector<std::pair<double, int>> candidates;
     std::set<int> nodes;
+    auto usableForThisStand = [&](const TaxiEdge &edge) {
+        if (edge.standLeadInRamp < 0)
+            return true;
+        if (edge.standLeadInRamp >= static_cast<int>(airport.ramps.size()))
+            return false;
+        return distance(airport.ramps[edge.standLeadInRamp].position, aircraft.position) <= 35;
+    };
     for (const auto &edge : airport.edges)
         if (!edge.runway && edge.activeRunways.empty() &&
-            (edge.width ? edge.width >= options.minimumWidth : options.allowUnknownWidth)) {
+            usableForThisStand(edge) &&
+            (options.ignorePavementLimits ||
+             (edge.width ? edge.width >= options.minimumWidth : options.allowUnknownWidth))) {
             nodes.insert(edge.from);
             nodes.insert(edge.to);
         }
@@ -181,13 +232,23 @@ PushbackPlan planPushback(const Airport &airport, const AircraftState &aircraft,
     PushbackPlan best;
     std::vector<PushbackPlan> detours;
     bool detoursGenerated = false;
+    if (options.computation) {
+        options.computation->stage.store(PlanningStage::Pushback, std::memory_order_relaxed);
+        options.computation->candidates.store(std::min<std::size_t>(24, candidates.size()),
+                                              std::memory_order_relaxed);
+    }
     for (std::size_t i = 0; i < std::min<std::size_t>(24, candidates.size()); ++i) {
+        checkPlanning(options);
+        if (options.computation)
+            options.computation->candidate.store(i + 1, std::memory_order_relaxed);
         int node = candidates[i].second;
         Vec2 target = project(aircraft.position, airport.nodes.at(node).position);
         std::vector<double> headings;
         for (const auto &edge : airport.edges) {
             if (edge.runway || !edge.activeRunways.empty() ||
-                (edge.width ? edge.width < options.minimumWidth : !options.allowUnknownWidth))
+                !usableForThisStand(edge) ||
+                (!options.ignorePavementLimits &&
+                 (edge.width ? edge.width < options.minimumWidth : !options.allowUnknownWidth)))
                 continue;
             int next = edge.from == node ? edge.to : edge.to == node && !edge.oneWay ? edge.from : -1;
             if (next >= 0) {
@@ -202,21 +263,26 @@ PushbackPlan planPushback(const Airport &airport, const AircraftState &aircraft,
             }
         }
         for (double yaw : headings) {
+            checkPlanning(options);
             PushbackPlan plan;
             if (!reverseLeg(pavement, aircraft, target, yaw, controller, plan)) {
                 if (!detoursGenerated) {
-                    detours = apronDetours(pavement, aircraft, controller);
+                    detours = apronDetours(pavement, aircraft, controller, options);
                     detoursGenerated = true;
                 }
-                if (!viaDetour(pavement, aircraft, target, yaw, controller, detours, plan))
+                if (!viaDetour(pavement, aircraft, target, yaw, controller, detours, plan, options))
                     continue;
             }
+            if (entersOtherStand(airport, aircraft, plan))
+                continue;
             plan.handoff = unproject(aircraft.position, target + direction(yaw) * controller.mainAxleAft);
             try {
                 auto handoffOptions = options;
                 handoffOptions.requiredDepartureNode = node;
                 handoffOptions.maxInitialTurnDegrees = 15;
                 plan.taxi = planRoute(airport, plan.handoff, yaw, destination, handoffOptions);
+            } catch (const PlanningCancelled &) {
+                throw;
             } catch (const std::exception &) {
                 continue;
             }
@@ -226,7 +292,9 @@ PushbackPlan planPushback(const Airport &airport, const AircraftState &aircraft,
                                          [&](Vec2 point) { return length(point) > 8; });
             if (firstLeg == plan.taxi.points.end() || std::abs(wrap180(heading(*firstLeg) - yaw)) > 10)
                 continue;
-            double cost = plan.taxi.length + plan.length * 4;
+            // Towing is substantially slower than forward taxi; avoid long
+            // reverse manoeuvres merely to shave a short taxi detour.
+            double cost = plan.taxi.length + plan.length * 6;
             if (cost >= bestCost)
                 continue;
             plan.heading = normalHeading(yaw);
@@ -237,10 +305,27 @@ PushbackPlan planPushback(const Airport &airport, const AircraftState &aircraft,
             plan.preview.requiresPushback = true;
             plan.preview.apronDeparture = true;
             plan.preview.points = plan.points;
+            plan.preview.pavementRisk.assign(plan.points.size(), false);
             plan.preview.pushbackPointCount = plan.points.size();
-            for (auto p : plan.taxi.points)
+            for (std::size_t point = 0; point < plan.taxi.points.size(); ++point) {
+                auto p = plan.taxi.points[point];
                 plan.preview.points.push_back(project(aircraft.position, unproject(plan.taxi.origin, p)));
+                plan.preview.pavementRisk.push_back(point < plan.taxi.pavementRisk.size() &&
+                                                    plan.taxi.pavementRisk[point]);
+            }
             plan.preview.length = plan.length + plan.taxi.length;
+            plan.preview.cockpitStop =
+                project(plan.preview.origin, unproject(plan.taxi.origin, plan.taxi.cockpitStop));
+            for (auto *path : {&plan.preview.cockpitPath, &plan.preview.mainAxlePath})
+                for (auto &point : *path) {
+                    point.position =
+                        project(plan.preview.origin, unproject(plan.taxi.origin, point.position));
+                    point.distance += plan.length;
+                }
+            for (auto &marker : plan.preview.nodesAlongRoute)
+                marker.distance += plan.length;
+            for (auto &marker : plan.preview.taxiwaysAlongRoute)
+                marker.distance += plan.length;
             plan.preview.taxiStartNode = node;
             best = std::move(plan);
             bestCost = cost;

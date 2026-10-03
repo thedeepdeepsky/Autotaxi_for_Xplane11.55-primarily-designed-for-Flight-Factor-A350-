@@ -71,15 +71,15 @@ void NumericRef::write(double v) const {
         XPLMSetDatai(ref_, static_cast<int>(v));
 }
 void ControlAdapter::initialize(const Config &config) {
-    lat_.bind("sim/flightmodel/position/latitude", -1, false);
-    lon_.bind("sim/flightmodel/position/longitude", -1, false);
-    heading_.bind("sim/flightmodel/position/psi", -1, false);
-    speed_.bind("sim/flightmodel/position/groundspeed", -1, false);
-    ground_.bind("sim/flightmodel/failures/onground_any", -1, false);
-    park_.bind("sim/cockpit2/controls/parking_brake_ratio", -1, true);
+    config_ = config;
+    lat_.bind(config.latitudeDataref, -1, false);
+    lon_.bind(config.longitudeDataref, -1, false);
+    heading_.bind(config.headingDataref, -1, false);
+    speed_.bind(config.speedDataref, -1, false);
+    ground_.bind(config.onGroundDataref, -1, false);
+    park_.bind(config.parkingBrakeDataref, config.parkingBrakeIndex, true);
     icao_ = XPLMFindDataRef("sim/aircraft/view/acf_ICAO");
     wheelOverride_ = XPLMFindDataRef("sim/operation/override/override_wheel_steer");
-    throttleOverride_ = XPLMFindDataRef("sim/operation/override/override_throttles");
     brakeOverride_ = XPLMFindDataRef("sim/operation/override/override_toe_brakes");
     steerOn_ = XPLMFindDataRef("sim/cockpit2/controls/nosewheel_steer_on");
     feedback_.bind(config.feedbackDataref, config.feedbackIndex, false);
@@ -114,22 +114,13 @@ void ControlAdapter::acquire(const Config &c) {
     ffPark_ = {};
     if (ffParkingBrake)
         ffPark_.bind("1-sim/parckBrake", -1, true);
-    bool parkingHeld = park_.read() > 0.1 || (ffPark_.bound() && ffPark_.read() < .9);
+    bool parkingHeld = parkingRatio() > 0.1 || (ffPark_.bound() && ffPark_.read() < .9);
     steer_.bind(c.steeringDataref, c.steeringIndex, true);
     feedback_.bind(c.feedbackDataref, c.feedbackIndex, false);
     if (steer_.ref() == feedback_.ref())
         throw std::runtime_error("Feedback must be actual wheel angle, separate from command");
-    left_.bind(c.leftBrakeDataref, -1, true);
-    right_.bind(c.rightBrakeDataref, -1, true);
-    useThrottleOverride_ = c.throttleDataref == "sim/flightmodel/engine/ENGN_thro_use";
-    throttleSource_ = c.throttleDataref;
-    // An aircraft plugin may own the engine output. Feed its lever input instead.
-    if (useThrottleOverride_ && throttleOverride_ && XPLMGetDatai(throttleOverride_) != 0) {
-        throttleSource_ = "sim/cockpit2/engine/actuators/throttle_ratio";
-        useThrottleOverride_ = false;
-        XPLMDebugString(
-            "[A350AutoTaxi] Existing throttle override: using throttle lever input; preserving override.\n");
-    }
+    left_.bind(c.leftBrakeDataref, c.leftBrakeIndex, true);
+    right_.bind(c.rightBrakeDataref, c.rightBrakeIndex, true);
     useBrakeOverride_ = c.leftBrakeDataref == "sim/cockpit2/controls/left_brake_ratio" &&
                         c.rightBrakeDataref == "sim/cockpit2/controls/right_brake_ratio";
     auto check = [cooperate](XPLMDataRef ref, const char *name, bool allowAircraftOverride = false) {
@@ -140,26 +131,8 @@ void ControlAdapter::acquire(const Config &c) {
     };
     if (c.steeringMode == "direct")
         check(wheelOverride_, "wheel steering", true);
-    if (useThrottleOverride_)
-        check(throttleOverride_, "throttles");
     if (useBrakeOverride_)
         check(brakeOverride_, "toe brakes", true);
-    throttle_ = XPLMFindDataRef(throttleSource_.c_str());
-    if (!throttle_ || !XPLMCanWriteDataRef(throttle_))
-        throw std::runtime_error("Throttle dataref unavailable or read-only: " + throttleSource_);
-    int types = XPLMGetDataRefTypes(throttle_);
-    throttleType_ = types & xplmType_FloatArray ? xplmType_FloatArray
-                    : types & xplmType_Float    ? xplmType_Float
-                    : types & xplmType_Double   ? xplmType_Double
-                                                : 0;
-    if (!throttleType_)
-        throw std::runtime_error("Throttle must be float array or scalar");
-    auto count = XPLMFindDataRef("sim/aircraft/engine/acf_num_engines");
-    engines_ = count ? XPLMGetDatai(count) : 2;
-    if (engines_ < 1 || engines_ > 8)
-        throw std::runtime_error("Unsupported engine count");
-    if (throttleType_ == xplmType_FloatArray && XPLMGetDatavf(throttle_, nullptr, 0, 0) < engines_)
-        throw std::runtime_error("Throttle array too short");
     previousLeft_ = left_.read();
     previousRight_ = right_.read();
     previousSteer_ = steer_.read();
@@ -176,45 +149,38 @@ void ControlAdapter::acquire(const Config &c) {
                         "monitoring actual nosewheel response.\n");
     if (ownWheelOverride_)
         XPLMSetDatai(wheelOverride_, 1);
-    if (useThrottleOverride_)
-        XPLMSetDatai(throttleOverride_, 1);
     if (ownBrakeOverride_)
         XPLMSetDatai(brakeOverride_, 1);
     if (steerOn_ && XPLMCanWriteDataRef(steerOn_))
         XPLMSetDatai(steerOn_, 1);
     owned_ = true;
     stopping_ = false;
+    emergencyHeld_ = false;
     command_ = mismatch_ = stoppedTime_ = stalledTime_ = lastTarget_ = 0;
-    writeThrottle(0);
     if (parkingHeld) {
         // Transfer the hold to service brakes before releasing the parking brake.
-        left_.write(.75);
-        right_.write(.75);
+        left_.write(.75 * c.brakeScale);
+        right_.write(.75 * c.brakeScale);
         if (ffPark_.bound())
             ffPark_.write(1);
-        park_.write(0);
+        park_.write(c.parkingBrakeReleased);
     }
     XPLMDebugString(("[A350AutoTaxi] Acquired " + description() + "\n").c_str());
 }
-void ControlAdapter::writeThrottle(double v) {
-    if (throttleType_ == xplmType_FloatArray) {
-        std::array<float, 8> t{};
-        std::fill_n(t.begin(), engines_, static_cast<float>(v));
-        XPLMSetDatavf(throttle_, t.data(), 0, engines_);
-    } else if (throttleType_ == xplmType_Double)
-        XPLMSetDatad(throttle_, v);
-    else
-        XPLMSetDataf(throttle_, static_cast<float>(v));
+double ControlAdapter::parkingRatio() const {
+    return (park_.read() - config_.parkingBrakeReleased) /
+           (config_.parkingBrakeSet - config_.parkingBrakeReleased);
 }
 void ControlAdapter::apply(const ControlOutput &out) {
     if (!owned_)
         return;
+    emergencyHeld_ = out.phase == TaxiPhase::Hold && !stopping_;
     if (!stopping_)
         command_ = out.steerDegrees;
     lastTarget_ = stopping_ ? 0 : out.targetSpeed;
     steer_.write(command_ * config_.steeringScale * config_.steeringSign);
-    writeThrottle(stopping_ ? 0 : std::clamp(out.throttle, 0.0, config_.controller.maxThrottle));
-    double brake = stopping_ ? 0.75 : std::clamp(out.brake, 0.0, 1.0);
+    double brake =
+        (stopping_ ? config_.controller.maxBrake : std::clamp(out.brake, 0.0, 1.0)) * config_.brakeScale;
     left_.write(brake);
     right_.write(brake);
 }
@@ -223,25 +189,25 @@ std::string ControlAdapter::monitor(double dt) {
         return {};
     if (ownWheelOverride_ && XPLMGetDatai(wheelOverride_) != 1)
         return "Wheel override was taken away";
-    if (useThrottleOverride_ && XPLMGetDatai(throttleOverride_) != 1)
-        return "Throttle override was taken away";
     if (ownBrakeOverride_ && XPLMGetDatai(brakeOverride_) != 1)
         return "Brake override was taken away";
     double actual = feedback_.read();
     if (!std::isfinite(actual))
         return "Invalid nosewheel feedback";
     // Read enacted wheel angle after physics, not the value just written into the command ref.
-    mismatch_ = std::abs(command_ - actual) > 12 ? mismatch_ + dt : std::max(0.0, mismatch_ - dt);
+    mismatch_ = emergencyHeld_                     ? 0
+                : std::abs(command_ - actual) > 12 ? mismatch_ + dt
+                                                   : std::max(0.0, mismatch_ - dt);
     if (mismatch_ > config_.feedbackTimeout)
         return "Nosewheel does not follow command; check FF steering profile";
     auto s = state();
     if (!s.onGround)
         return "Aircraft became airborne";
-    if (park_.read() > 0.2 || (ffPark_.bound() && ffPark_.read() < .8))
+    if (!emergencyHeld_ && (parkingRatio() > 0.2 || (ffPark_.bound() && ffPark_.read() < .8)))
         return "Parking brake applied";
     stalledTime_ = lastTarget_ > 0.8 && s.speed < 0.15 ? stalledTime_ + dt : 0;
     if (stalledTime_ > 30)
-        return "No movement: check engines, FF throttle/brakes and chocks";
+        return "No movement: set manual taxi thrust and check brakes/chocks";
     return {};
 }
 void ControlAdapter::beginStop() {
@@ -270,10 +236,9 @@ bool ControlAdapter::updateStop(double dt) {
 void ControlAdapter::release(bool hold) {
     if (!owned_)
         return;
-    writeThrottle(0);
     steer_.write(previousSteer_);
     if (hold) {
-        park_.write(1);
+        park_.write(config_.parkingBrakeSet);
         if (ffPark_.bound())
             ffPark_.write(0);
     }
@@ -281,8 +246,6 @@ void ControlAdapter::release(bool hold) {
     right_.write(previousRight_);
     if (ownWheelOverride_)
         XPLMSetDatai(wheelOverride_, 0);
-    if (useThrottleOverride_)
-        XPLMSetDatai(throttleOverride_, 0);
     if (ownBrakeOverride_)
         XPLMSetDatai(brakeOverride_, 0);
     if (steerOn_ && XPLMCanWriteDataRef(steerOn_))
@@ -295,6 +258,6 @@ double ControlAdapter::actualSteer() const {
 }
 std::string ControlAdapter::description() const {
     return config_.steeringMode + " [" + std::to_string(config_.steeringIndex) + "] " +
-           config_.steeringDataref + " | throttle " + throttleSource_;
+           config_.steeringDataref + " | manual thrust / brake speed control";
 }
 } // namespace autotaxi

@@ -10,12 +10,13 @@ void check(bool condition, const std::string &message) {
     if (!condition)
         throw std::runtime_error(message);
 }
-void simulate(const Route &route, double initialHeading) {
+void simulate(const Route &route, double initialHeading, double maxTrackingError = 14) {
     ControllerConfig config;
     TaxiController controller;
     controller.start(route, config);
     Vec2 axle = direction(initialHeading) * -config.mainAxleAft;
-    double yaw = initialHeading, speed = 0, maxError = 0;
+    double yaw = initialHeading, speed = 0, maxError = 0, errorAt = 0;
+    Vec2 errorPosition;
     constexpr double dt = 0.05;
     for (int step = 0; step < 100000 && controller.active(); ++step) {
         AircraftState state{unproject(route.origin, axle + direction(yaw) * config.mainAxleAft), yaw, speed,
@@ -25,15 +26,65 @@ void simulate(const Route &route, double initialHeading) {
             std::cerr << "\nAt " << axle.x << "," << axle.y << " yaw " << yaw << " speed " << speed << " CTE "
                       << output.crossTrack << " remaining " << output.remaining << "\n";
         check(output.phase != TaxiPhase::Fault, route.label + ": " + output.reason);
-        maxError = std::max(maxError, output.crossTrack);
-        speed = std::max(0.0, speed + (output.throttle * 4 - 0.06 - output.brake * 1.5) * dt);
+        if (output.crossTrack > maxError) {
+            maxError = output.crossTrack;
+            errorAt = output.progress;
+            errorPosition =
+                project(route.origin, state.position) +
+                direction(yaw) * ((route.cockpitGuidance ? config.wheelbase + config.cockpitAheadNose : 0) -
+                                  config.mainAxleAft);
+        }
+        speed = std::max(0.0, speed + (.39 - output.brake * 1.5) * dt);
         yaw = wrap180(yaw + speed / config.wheelbase * std::tan(output.steerDegrees * rad) * dt / rad);
         axle = axle + direction(yaw) * (speed * dt);
     }
     check(controller.phase() == TaxiPhase::Complete, route.label + ": simulation did not complete");
+    check(maxError < maxTrackingError,
+          route.label + ": regression tracking tolerance (CTE=" + std::to_string(maxError) + " m at " +
+              std::to_string(errorAt) + " m)");
     check(std::abs(wrap180(yaw - route.finalHeading)) < 2, route.label + ": final heading");
-    check(length(axle - route.points.back()) < 4.5, route.label + ": final position");
-    std::cout << " / simulation CTE " << maxError << " m";
+    const auto reference =
+        axle + direction(yaw) * (route.cockpitGuidance ? config.wheelbase + config.cockpitAheadNose : 0);
+    check(length(reference - route.points.back()) < 4.5, route.label + ": final position");
+    std::cout << " / simulation CTE " << maxError << " m at " << errorAt << " m / "
+              << (route.cockpitGuidance     ? "cockpit"
+                  : route.mainAxleOversteer ? "main-axle oversteer"
+                                            : "axle")
+              << " / paint starts " << route.paintedStartDistance << " m";
+    if (maxError > 5) {
+        double nearest = 1e30;
+        std::size_t segment = 0;
+        for (std::size_t i = 0; i + 1 < route.points.size(); ++i) {
+            auto projection = onSegment(errorPosition, route.points[i], route.points[i + 1]);
+            if (projection.distance < nearest) {
+                nearest = projection.distance;
+                segment = i;
+            }
+        }
+        std::cout << " / nearest-route gap " << nearest << " / corner turns";
+        for (std::size_t i = segment > 2 ? segment - 2 : 1; i + 1 < route.points.size() && i <= segment + 3;
+             ++i)
+            std::cout << ' '
+                      << wrap180(heading(route.points[i + 1] - route.points[i]) -
+                                 heading(route.points[i] - route.points[i - 1]));
+        std::string taxiway;
+        for (const auto &marker : route.taxiwaysAlongRoute)
+            if (marker.distance <= errorAt)
+                taxiway = marker.label;
+        std::cout << " / " << taxiway;
+        double along = 0;
+        for (std::size_t i = 1; i + 1 < route.points.size(); ++i) {
+            along += length(route.points[i] - route.points[i - 1]);
+            if (along >= errorAt) {
+                std::cout << " / tracked corner "
+                          << wrap180(heading(route.points[i + 1] - route.points[i]) -
+                                     heading(route.points[i] - route.points[i - 1]))
+                          << " / legs " << length(route.points[i] - route.points[i - 1]) << ','
+                          << length(route.points[i + 1] - route.points[i]);
+                break;
+            }
+        }
+    }
 }
 } // namespace
 int main(int argc, char **argv) {
@@ -74,7 +125,7 @@ int main(int argc, char **argv) {
             std::cout << destination.label << " " << route.length << " m / "
                       << (route.requiresPushback ? "pushback needed" : "forward departure");
             if (!route.requiresPushback)
-                simulate(route, yaw);
+                simulate(route, yaw, stand539 && std::abs(wrap180(yaw)) < 1 ? 4 : 14);
             else {
                 // A tow moves the aircraft to the first network segment before taxi control starts.
                 check(route.points.size() > 2, "Pushback route needs a network segment");

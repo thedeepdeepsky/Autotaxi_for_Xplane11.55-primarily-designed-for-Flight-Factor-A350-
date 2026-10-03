@@ -129,7 +129,10 @@ Airport parseAirport(std::istream &input, const std::string &source, bool buildN
             if (outline.empty())
                 outline.push_back(points.front());
             outline.insert(outline.end(), points.begin() + 1, points.end());
-            if (ring[i].style > 0) {
+            // Node attributes in a 110 pavement ring are pavement edge or
+            // texture metadata, not painted linear features. Only row 120
+            // linear features may populate the ground-marking layer.
+            if (linear && ring[i].style > 0) {
                 if (!a.groundLines.empty() && a.groundLines.back().style == ring[i].style &&
                     a.groundLines.back().name == lineName &&
                     distance(a.groundLines.back().points.back(), points.front()) < .01)
@@ -198,12 +201,15 @@ Airport parseAirport(std::istream &input, const std::string &source, bool buildN
                         continue;
                     }
                 }
-                if (code != 115 && code != 116)
-                    for (std::size_t k = attributes; k < t.size(); ++k) {
-                        int style = std::stoi(t[k]);
-                        if (style > 0 && style < 100)
-                            n.style = style;
-                    }
+                if (code != 115 && code != 116 && attributes < t.size()) {
+                    // The first optional value is the line type (0..108).
+                    // A second value is the lighting code; do not let it
+                    // overwrite the painted line type.  In particular, a
+                    // centerline may be encoded as `1 101`.
+                    int style = std::stoi(t[attributes]);
+                    if (style > 0 && style <= 108)
+                        n.style = style;
+                }
                 if (valid(n.point))
                     ring.push_back(n);
                 if (code >= 113)
@@ -245,17 +251,66 @@ Airport parseAirport(std::istream &input, const std::string &source, bool buildN
                         if (!n.empty())
                             a.edges.back().activeRunways.push_back(n);
                 }
+            } else if (code == 15 && t.size() >= 5) {
+                Ramp r{{number(t[1]), number(t[2])}, number(t[3]), 0, tail(t, 4), {}};
+                if (valid(r.position) && std::isfinite(r.heading))
+                    a.ramps.push_back(r);
             } else if (code == 1300 && t.size() >= 7) {
                 Ramp r{{number(t[1]), number(t[2])}, number(t[3]), 0, tail(t, 6), {}};
                 if (valid(r.position))
                     a.ramps.push_back(r);
             } else if (code == 1301 && t.size() >= 2 && !a.ramps.empty())
                 a.ramps.back().width = t[1][0];
+            else if (code == 20 && t.size() >= 7) {
+                AirportSign sign;
+                sign.position = {number(t[1]), number(t[2])};
+                sign.heading = number(t[3]);
+                sign.text = tail(t, 6);
+                sign.runway = sign.text.find("RWY") != std::string::npos ||
+                              sign.text.find("10-") != std::string::npos ||
+                              sign.text.find("18-") != std::string::npos;
+                sign.noEntry = sign.text.find("NO ENTRY") != std::string::npos ||
+                               sign.text.find("NO_ENTRY") != std::string::npos;
+                if (valid(sign.position) && !sign.text.empty())
+                    a.signs.push_back(std::move(sign));
+            }
         } catch (const std::exception &) { /* Ignore malformed records, never synthesize connections. */
             ring.clear();
             pavement = -1;
             linear = false;
         }
+    }
+    for (const auto &line : a.groundLines) {
+        if (line.points.size() < 2 ||
+            !(line.style == 4 || line.style == 5 || line.style == 6 || line.style == 103 ||
+              line.style == 104))
+            continue;
+        Vec2 local = project(line.points.front(), line.points.back());
+        GeoPoint midpoint = unproject(line.points.front(), local * .5);
+        int runway = -1;
+        double best = 1e30;
+        const double holdHeading = heading(local) + 90;
+        for (std::size_t i = 0; i < a.runways.size(); ++i) {
+            Vec2 start = project(midpoint, a.runways[i].ends[0].position);
+            Vec2 end = project(midpoint, a.runways[i].ends[1].position);
+            auto snap = onSegment({}, start, end);
+            if (snap.distance < best && snap.distance <= a.runways[i].width * .5 + 55) {
+                best = snap.distance;
+                runway = static_cast<int>(i);
+            }
+        }
+        if (runway < 0)
+            continue;
+        int end = distance(midpoint, a.runways[runway].ends[1].position) <
+                          distance(midpoint, a.runways[runway].ends[0].position)
+                      ? 1
+                      : 0;
+        if (std::none_of(a.holdShortPoints.begin(), a.holdShortPoints.end(), [&](const HoldShortPoint &p) {
+                return p.runway == runway && distance(p.position, midpoint) < 8;
+            }))
+            a.holdShortPoints.push_back({midpoint, runway, end, holdHeading,
+                                         "RWY " + a.runways[runway].ends[end].name + " HOLD " +
+                                             std::to_string(a.holdShortPoints.size() + 1)});
     }
     a.edges.erase(std::remove_if(a.edges.begin(), a.edges.end(),
                                  [&](const TaxiEdge &e) {
@@ -287,7 +342,8 @@ void AptDatabase::scan(const std::filesystem::path &root) {
                 break;
             // Most apt.dat rows are polygons and lights; skip these without tokenizing.
             if (line.rfind("1 ", 0) != 0 && line.rfind("16 ", 0) != 0 && line.rfind("17 ", 0) != 0 &&
-                line.rfind("100 ", 0) != 0 && line.rfind("1201 ", 0) != 0 && line.rfind("1300 ", 0) != 0)
+                line.rfind("100 ", 0) != 0 && line.rfind("1201 ", 0) != 0 && line.rfind("1300 ", 0) != 0 &&
+                line.rfind("15 ", 0) != 0)
                 continue;
             auto t = tokens(line);
             if (t.empty())
@@ -314,7 +370,7 @@ void AptDatabase::scan(const std::filesystem::path &root) {
                 } else if (recording && code == 100 && t.size() >= 26) {
                     addPoint(current, {number(t[9]), number(t[10])});
                     addPoint(current, {number(t[18]), number(t[19])});
-                } else if (recording && (code == 1201 || code == 1300) && t.size() >= 3)
+                } else if (recording && (code == 1201 || code == 1300 || code == 15) && t.size() >= 3)
                     addPoint(current, {number(t[1]), number(t[2])});
             } catch (const std::exception &) {
             }
