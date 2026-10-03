@@ -155,6 +155,8 @@ int main() {
         rejects([&] { adapter.acquire(c); }, "Connected tug prevents taxi control ownership");
         named("bp/connected").values[0] = 0;
         named(c.steeringDataref).values[1] = 17;
+        named(c.throttleDataref).values[0] = 0.25;
+        named(c.throttleDataref).values[1] = 0.25;
         named(c.throttleDataref).values[2] = 0.77;
         named("sim/operation/override/override_wheel_steer").values[0] = 1;
         named("sim/cockpit2/controls/parking_brake_ratio").values[0] = 1;
@@ -175,13 +177,20 @@ int main() {
         adapter.apply(out);
         check(named(c.steeringDataref).values[0] == 30 && named(c.steeringDataref).values[1] == 17,
               "Write only the selected nosewheel");
-        check(std::abs(named(c.throttleDataref).values[1] - 0.1) < 1e-6 &&
+        check(named(c.throttleDataref).values[0] == 0.25 && named(c.throttleDataref).values[1] == 0.25 &&
                   named(c.throttleDataref).values[2] == 0.77,
-              "Write only installed engines");
+              "Taxi leaves every engine thrust setting untouched");
         std::string fault;
         for (int i = 0; i < 6; ++i)
             fault = adapter.monitor(1);
         check(!fault.empty(), "Actual wheel feedback must detect FF overwrite");
+        out.phase = TaxiPhase::Hold;
+        out.brake = 1;
+        adapter.apply(out);
+        for (int i = 0; i < 10; ++i)
+            check(adapter.monitor(1).empty(),
+                  "Emergency hold retains ownership while stationary wheel feedback settles");
+        out.phase = TaxiPhase::Taxi;
         adapter.beginStop();
         check(!adapter.updateStop(0.5), "Hold brakes before stop is confirmed");
         check(std::abs(named(c.steeringDataref).values[0] - 22) < 1e-6,
@@ -209,7 +218,7 @@ int main() {
         check(adapter.monitor(1).empty(), "Physical wheel feedback matches custom command");
         adapter.release(false);
         check(!adapter.ownsControls(), "Immediate manual disconnect");
-        check(named(c.throttleDataref).values[0] == 0, "Disconnect sets thrust idle");
+        check(named(c.throttleDataref).values[0] == 0.25, "Disconnect preserves manual thrust");
         c = Config{};
         named(c.feedbackDataref).values[0] = 0;
         auto &overrideRef = named("sim/operation/override/override_throttles");
@@ -217,23 +226,26 @@ int main() {
         named(c.throttleDataref).values[0] = 0.33;
         const std::string lever = "sim/cockpit2/engine/actuators/throttle_ratio";
         named(lever).writable = false;
-        rejects([&] { adapter.acquire(c); }, "Unavailable fallback must fail before acquiring controls");
-        check(!adapter.ownsControls() && overrideRef.values[0] == 1 &&
-                  named("sim/operation/override/override_wheel_steer").values[0] == 0,
-              "Failed fallback preserves existing overrides");
-        named(lever).writable = true;
+        named(lever).values[0] = 0.42;
+        named(lever).values[1] = 0.42;
         named(lever).values[2] = 0.66;
         adapter.acquire(c);
         adapter.apply(out);
-        check(std::abs(named(lever).values[0] - out.throttle) < 1e-6 &&
-                  std::abs(named(lever).values[1] - out.throttle) < 1e-6 && named(lever).values[2] == 0.66,
-              "Existing engine override routes commands to installed-engine lever inputs");
+        check(named(lever).values[0] == 0.42 && named(lever).values[1] == 0.42 &&
+                  named(lever).values[2] == 0.66,
+              "Readonly throttle lever inputs do not block brake-only control");
         check(named(c.throttleDataref).values[0] == 0.33 && overrideRef.values[0] == 1,
               "Do not write aircraft-owned engine output or override");
         adapter.release(false);
-        check(named(lever).values[0] == 0 && named(c.throttleDataref).values[0] == 0.33 &&
+        check(named(lever).values[0] == 0.42 && named(c.throttleDataref).values[0] == 0.33 &&
                   overrideRef.values[0] == 1,
-              "Disconnect idles lever and preserves aircraft throttle override");
+              "Disconnect preserves lever, thrust output and aircraft throttle override");
+        refs.erase(c.throttleDataref);
+        refs.erase(lever);
+        adapter.acquire(c);
+        adapter.apply(out);
+        adapter.release(false);
+        check(overrideRef.values[0] == 1, "Missing throttle refs do not affect brake-only control");
         ffEnabled = true;
         scalar("1-sim/parckBrake", xplmType_Float, 0);
         named("sim/operation/override/override_wheel_steer").values[0] = 1;

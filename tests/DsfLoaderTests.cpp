@@ -29,6 +29,11 @@ int main(int argc, char **argv) {
         auto result = loadDsfPaintedLines(airport, std::filesystem::u8path(argv[2]), argv[3]);
         if (result.files != 1 || result.lines <= 0 || airport.groundLines.size() <= before)
             throw std::runtime_error("DSF loader did not import single-yellow lines");
+        if (result.contours <= 0 || airport.sceneryContours.empty() || airport.pavementCoverageComplete)
+            throw std::runtime_error("DSF contours must retain incomplete surface coverage");
+        auto temporary = std::filesystem::temp_directory_path() / ("A350AutoTaxi-" + airport.id + "-dsf.txt");
+        if (std::filesystem::exists(temporary))
+            throw std::runtime_error("Converted DSF stream must close before deleting its temporary file");
         buildCenterlineNetwork(airport);
         RouteOptions options;
         options.runwayClearance = true;

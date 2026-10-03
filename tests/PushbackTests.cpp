@@ -31,19 +31,49 @@ void simulateTaxi(const PushbackPlan &plan) {
             std::cerr << '\n';
             throw std::runtime_error(plan.taxi.label + ": " + out.reason);
         }
-        speed = std::max(0.0, speed + (out.throttle * 4 - .06 - out.brake * 1.5) * dt);
+        speed = std::max(0.0, speed + (.39 - out.brake * 1.5) * dt);
         yaw = wrap180(yaw + speed / config.wheelbase * std::tan(out.steerDegrees * rad) * dt / rad);
         axle = axle + direction(yaw) * (speed * dt);
     }
     check(controller.phase() == TaxiPhase::Complete,
           "Forward taxi must finish from the actual planned tow endpoint");
     check(std::abs(wrap180(yaw - plan.taxi.finalHeading)) < 2, "Runway alignment after automatic pushback");
-    check(length(axle - plan.taxi.points.back()) < 4.5, "Runway endpoint after automatic pushback");
+    Vec2 reference =
+        axle + direction(yaw) * (plan.taxi.cockpitGuidance ? config.wheelbase + config.cockpitAheadNose : 0);
+    check(length(reference - plan.taxi.points.back()) < 4.5, "Runway endpoint after automatic pushback");
 }
 void validate(const PushbackPlan &plan, const Airport &airport, const AircraftState &aircraft) {
     check(plan.nodeId >= 0 && !plan.segments.empty(), "A reverse route must end at a real taxi node");
     check(plan.preview.requiresPushback && !plan.taxi.requiresPushback,
           "Tow and taxi routes must be separate");
+    check(plan.preview.nodesAlongRoute.size() == plan.taxi.nodesAlongRoute.size(),
+          "Tow preview retains forward taxi node markers");
+    check(plan.preview.cockpitPath.size() == plan.taxi.cockpitPath.size(),
+          "Tow preview retains the expected forward cockpit path");
+    check(plan.preview.mainAxlePath.size() == plan.taxi.mainAxlePath.size(),
+          "Tow preview retains the expected main-axle path");
+    for (std::size_t i = 0; i < plan.taxi.mainAxlePath.size(); ++i)
+        check(distance(unproject(plan.preview.origin, plan.preview.mainAxlePath[i].position),
+                       unproject(plan.taxi.origin, plan.taxi.mainAxlePath[i].position)) < .01 &&
+                  std::abs(plan.preview.mainAxlePath[i].distance - plan.taxi.mainAxlePath[i].distance -
+                           plan.length) < 1e-6,
+              "Main-axle planning path must retain location and progress across towing origins");
+    for (std::size_t i = 0; i < plan.taxi.cockpitPath.size(); ++i) {
+        check(distance(unproject(plan.preview.origin, plan.preview.cockpitPath[i].position),
+                       unproject(plan.taxi.origin, plan.taxi.cockpitPath[i].position)) < .01,
+              "Preview and taxi cockpit paths agree geographically despite different origins");
+        check(std::abs(plan.preview.cockpitPath[i].distance - plan.taxi.cockpitPath[i].distance -
+                       plan.length) < 1e-6,
+              "Cockpit preview progress includes towing distance");
+    }
+    for (std::size_t i = 0; i < plan.taxi.nodesAlongRoute.size(); ++i)
+        check(std::abs(plan.preview.nodesAlongRoute[i].distance - plan.taxi.nodesAlongRoute[i].distance -
+                       plan.length) < 1e-6,
+              "Preview node markers include the reverse route distance");
+    for (std::size_t i = 0; i < plan.taxi.taxiwaysAlongRoute.size(); ++i)
+        check(std::abs(plan.preview.taxiwaysAlongRoute[i].distance -
+                       plan.taxi.taxiwaysAlongRoute[i].distance - plan.length) < 1e-6,
+              "Preview taxiway entry markers include the reverse route distance");
     check(distance(airport.nodes.at(plan.nodeId).position, plan.segments.back().end) < 0.5,
           "Tow ends at node");
     check(std::abs(wrap180(plan.segments.front().startHeading - aircraft.trueHeading)) < 0.01,
@@ -173,12 +203,12 @@ int main(int argc, char **argv) {
                     continue;
                 auto plan = planPushback(airport, aircraft, destination, options, {});
                 validate(plan, airport, aircraft);
-                if (stand == "590")
-                    check(plan.length < 180, "Stand 590 should use the nearby painted apron network");
                 simulateTaxi(plan);
                 std::cout << destination.label << " -> Node " << plan.nodeId << " tow " << plan.length
                           << " m / heading " << plan.heading << " / taxi " << plan.taxi.length
                           << " m / fallback " << plan.taxi.atcFallbackCount << '\n';
+                if (stand == "590")
+                    check(plan.length < 180, "Stand 590 should use the nearby painted apron network");
                 ++reached;
             }
             check(reached == 10, "All ten ZSPD runway directions must have a tow-to-node departure");

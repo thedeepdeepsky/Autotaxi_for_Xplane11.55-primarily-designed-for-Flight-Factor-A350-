@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600">
+<rect x="0" y="0" width="900" height="600" fill="rgb(21,22,24)"/>
+<text x="22" y="32" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">A350 AUTOTAXI</text>
+<text x="220" y="32" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Airport detection</text>
+<rect x="804" y="12" width="30" height="30" fill="rgb(30,31,34)"/>
+<line x1="814" y1="23" x2="823" y2="23" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="823" y1="23" x2="823" y2="32" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="823" y1="32" x2="814" y2="32" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="814" y1="32" x2="814" y2="28" stroke="rgb(234,237,239)" stroke-width="1"/>
+<polygon points="811,29 817,29 814,25" fill="rgb(234,237,239)"/>
+<rect x="844" y="12" width="30" height="30" fill="rgb(30,31,34)"/>
+<line x1="852" y1="21" x2="866" y2="21" stroke="rgb(234,237,239)" stroke-width="1"/>
+<rect x="855" y="19" width="2" height="4" fill="rgb(234,237,239)"/>
+<line x1="852" y1="27" x2="866" y2="27" stroke="rgb(234,237,239)" stroke-width="1"/>
+<rect x="861" y="25" width="2" height="4" fill="rgb(234,237,239)"/>
+<line x1="852" y1="33" x2="866" y2="33" stroke="rgb(234,237,239)" stroke-width="1"/>
+<rect x="855" y="31" width="2" height="4" fill="rgb(234,237,239)"/>
+<line x1="0" y1="52" x2="900" y2="52" stroke="rgb(61,63,68)" stroke-width="1"/>
+<text x="22" y="77" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">GROUND SPEED</text>
+<text x="22" y="98" font-family="Consolas,monospace" font-size="14" fill="rgb(68,216,181)">0.0 kt</text>
+<text x="158.96" y="77" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">NOSEWHEEL CMD / ACT</text>
+<text x="158.96" y="98" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">0.0 / 0.0 deg</text>
+<text x="364.4" y="77" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">REMAINING</text>
+<text x="364.4" y="98" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">224 m</text>
+<text x="501.36" y="77" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">COCKPIT CTE</text>
+<text x="501.36" y="98" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">--</text>
+<text x="689.68" y="77" font-family="Consolas,monospace" font-size="14" fill="rgb(68,216,181)">MAIN AXLE CTE</text>
+<text x="689.68" y="98" font-family="Consolas,monospace" font-size="14" fill="rgb(68,216,181)">--</text>
+<line x1="0" y1="115" x2="900" y2="115" stroke="rgb(61,63,68)" stroke-width="1"/>
+<text x="22" y="140" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">FROM</text>
+<text x="78" y="140" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Current position | N...</text>
+<text x="22" y="158" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Node 12 / 0 m</text>
+<text x="310" y="135" font-family="Consolas,monospace" font-size="14" fill="rgb(68,216,181)">NEXT TURN --   NEXT -- / --:--</text>
+<text x="310" y="153" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">TAXIWAY -- / -- / --:--   TOTAL 00:44</text>
+<line x1="292" y1="158" x2="292" y2="455" stroke="rgb(61,63,68)" stroke-width="1"/>
+<rect x="18" y="161" width="84" height="30" fill="rgb(30,31,34)"/>
+<text x="32" y="181" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Runways</text>
+<rect x="18" y="189" width="84" height="2" fill="rgb(68,216,181)"/>
+<rect x="106" y="161" width="84" height="30" fill="rgb(30,31,34)"/>
+<text x="124" y="181" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Stands</text>
+<rect x="194" y="161" width="84" height="30" fill="rgb(30,31,34)"/>
+<text x="216" y="181" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Nodes</text>
+<rect x="18" y="203" width="260" height="34" fill="rgb(30,31,34)"/>
+<text x="29" y="225" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Search destination</text>
+<text x="30" y="279" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">No matching destinations</text>
+<rect x="310" y="160" width="572" height="284" fill="rgb(30,31,34)"/>
+<rect x="602" y="320" width="8" height="8" fill="rgb(188,135,255)"/>
+<rect x="613" y="331" width="52" height="17" fill="rgb(21,22,24)"/>
+<text x="615" y="344" font-family="Consolas,monospace" font-size="14" fill="rgb(188,135,255)">3: #12</text>
+<line x1="606" y1="324" x2="626" y2="284" stroke="rgb(255,183,76)" stroke-width="3"/>
+<rect x="622" y="280" width="8" height="8" fill="rgb(255,183,76)"/>
+<line x1="604.964" y1="324.44" x2="607.036" y2="324.44" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="604.964" y1="324.44" x2="606" y2="318.41" stroke="rgb(147,158,165)" stroke-width="1"/>
+<line x1="607.036" y1="324.44" x2="606" y2="318.41" stroke="rgb(147,158,165)" stroke-width="1"/>
+<line x1="606" y1="324.44" x2="606" y2="318.41" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="604.964" y1="327.44" x2="606.464" y2="327.038" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="606.464" y1="327.038" x2="607.562" y2="325.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="607.562" y1="325.94" x2="607.964" y2="324.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="607.964" y1="324.44" x2="607.562" y2="322.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="607.562" y1="322.94" x2="606.464" y2="321.842" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="606.464" y1="321.842" x2="604.964" y2="321.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="604.964" y1="321.44" x2="603.464" y2="321.842" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="603.464" y1="321.842" x2="602.366" y2="322.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="602.366" y1="322.94" x2="601.964" y2="324.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="601.964" y1="324.44" x2="602.366" y2="325.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="602.366" y1="325.94" x2="603.464" y2="327.038" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="603.464" y1="327.038" x2="604.964" y2="327.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="607.036" y1="327.44" x2="608.536" y2="327.038" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="608.536" y1="327.038" x2="609.634" y2="325.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="609.634" y1="325.94" x2="610.036" y2="324.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="610.036" y1="324.44" x2="609.634" y2="322.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="609.634" y1="322.94" x2="608.536" y2="321.842" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="608.536" y1="321.842" x2="607.036" y2="321.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="607.036" y1="321.44" x2="605.536" y2="321.842" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="605.536" y1="321.842" x2="604.438" y2="322.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="604.438" y1="322.94" x2="604.036" y2="324.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="604.036" y1="324.44" x2="604.438" y2="325.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="604.438" y1="325.94" x2="605.536" y2="327.038" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="605.536" y1="327.038" x2="607.036" y2="327.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="606" y1="321.41" x2="607.5" y2="321.008" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="607.5" y1="321.008" x2="608.598" y2="319.91" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="608.598" y1="319.91" x2="609" y2="318.41" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="609" y1="318.41" x2="608.598" y2="316.91" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="608.598" y1="316.91" x2="607.5" y2="315.812" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="607.5" y1="315.812" x2="606" y2="315.41" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="606" y1="315.41" x2="604.5" y2="315.812" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="604.5" y1="315.812" x2="603.402" y2="316.91" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="603.402" y1="316.91" x2="603" y2="318.41" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="603" y1="318.41" x2="603.402" y2="319.91" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="603.402" y1="319.91" x2="604.5" y2="321.008" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="604.5" y1="321.008" x2="606" y2="321.41" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<text x="615" y="313.41" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">COCKPIT</text>
+<line x1="606" y1="327.44" x2="607.5" y2="327.038" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="607.5" y1="327.038" x2="608.598" y2="325.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="608.598" y1="325.94" x2="609" y2="324.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="609" y1="324.44" x2="608.598" y2="322.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="608.598" y1="322.94" x2="607.5" y2="321.842" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="607.5" y1="321.842" x2="606" y2="321.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="606" y1="321.44" x2="604.5" y2="321.842" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="604.5" y1="321.842" x2="603.402" y2="322.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="603.402" y1="322.94" x2="603" y2="324.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="603" y1="324.44" x2="603.402" y2="325.94" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="603.402" y1="325.94" x2="604.5" y2="327.038" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<line x1="604.5" y1="327.038" x2="606" y2="327.44" stroke="rgb(255,183,76)" stroke-width="1.5"/>
+<text x="615" y="331.41" font-family="Consolas,monospace" font-size="14" fill="rgb(255,183,76)">AXLE</text>
+<text x="324" y="184" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">AIRPORT</text>
+<rect x="650" y="167" width="84" height="27" fill="rgb(21,22,24)"/>
+<text x="660" y="185" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Local</text>
+<rect x="738" y="167" width="84" height="27" fill="rgb(61,63,68)"/>
+<text x="748" y="185" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Airport</text>
+<rect x="738" y="192" width="84" height="2" fill="rgb(68,216,181)"/>
+<text x="854" y="184" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">N</text>
+<line x1="859" y1="190" x2="859" y2="205" stroke="rgb(147,158,165)" stroke-width="1"/>
+<rect x="324" y="199" width="30" height="30" fill="rgb(30,31,34)"/>
+<line x1="333" y1="208" x2="337" y2="208" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="333" y1="208" x2="333" y2="212" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="333" y1="220" x2="337" y2="220" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="333" y1="220" x2="333" y2="216" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="345" y1="208" x2="341" y2="208" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="345" y1="208" x2="345" y2="212" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="345" y1="220" x2="341" y2="220" stroke="rgb(234,237,239)" stroke-width="1"/>
+<line x1="345" y1="220" x2="345" y2="216" stroke="rgb(234,237,239)" stroke-width="1"/>
+<rect x="324" y="237" width="30" height="30" fill="rgb(30,31,34)"/>
+<line x1="334" y1="252" x2="344" y2="252" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<line x1="339" y1="247" x2="339" y2="257" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<rect x="324" y="275" width="30" height="30" fill="rgb(30,31,34)"/>
+<line x1="334" y1="290" x2="344" y2="290" stroke="rgb(234,237,239)" stroke-width="1.5"/>
+<text x="324" y="432" font-family="Consolas,monospace" font-size="14" fill="rgb(68,216,181)">Small stand  /  0.22 km</text>
+<line x1="0" y1="455" x2="900" y2="455" stroke="rgb(61,63,68)" stroke-width="1"/>
+<text x="22" y="483" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">TAXI SPEED</text>
+<rect x="126" y="463" width="32" height="30" fill="rgb(30,31,34)"/>
+<text x="138" y="483" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">-</text>
+<text x="171" y="483" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">10 kt</text>
+<rect x="238" y="463" width="32" height="30" fill="rgb(30,31,34)"/>
+<text x="250" y="483" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">+</text>
+<rect x="312" y="468" width="18" height="18" fill="rgb(30,31,34)"/>
+<text x="339" y="482" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Runway clearance</text>
+<text x="665" y="483" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">READY</text>
+<rect x="22" y="503" width="90" height="36" fill="rgb(30,31,34)"/>
+<text x="39" y="526" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Preview</text>
+<rect x="122" y="503" width="130" height="36" fill="rgb(30,31,34)"/>
+<text x="147" y="526" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Start taxi</text>
+<rect x="262" y="503" width="108" height="36" fill="rgb(30,31,34)"/>
+<text x="296" y="526" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Route</text>
+<rect x="380" y="503" width="180" height="36" fill="rgb(30,31,34)"/>
+<text x="410" y="526" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Emergency brake</text>
+<rect x="570" y="503" width="160" height="36" fill="rgb(30,31,34)"/>
+<text x="594" y="526" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Manual control</text>
+<rect x="740" y="503" width="138" height="36" fill="rgb(30,31,34)"/>
+<text x="773" y="526" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Stop taxi</text>
+<text x="22" y="565" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Detecting airport... | Pavement clearance risk (orange) | Undersized stand (orange)</text>
+<rect x="318" y="162" width="560" height="350" fill="rgb(21,22,24)"/>
+<text x="336" y="188" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">ROUTE OPTIONS</text>
+<rect x="832" y="170" width="28" height="28" fill="rgb(30,31,34)"/>
+<text x="842" y="189" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">X</text>
+<rect x="336" y="213" width="18" height="18" fill="rgb(30,31,34)"/>
+<line x1="339" y1="222" x2="343" y2="226" stroke="rgb(68,216,181)" stroke-width="2"/>
+<line x1="343" y1="226" x2="351" y2="216" stroke="rgb(68,216,181)" stroke-width="2"/>
+<text x="364" y="227" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Allow oversteer</text>
+<rect x="336" y="245" width="18" height="18" fill="rgb(30,31,34)"/>
+<text x="364" y="259" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Relax pavement clearance</text>
+<rect x="336" y="277" width="18" height="18" fill="rgb(30,31,34)"/>
+<text x="364" y="291" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">Allow undersized stands</text>
+<rect x="336" y="309" width="18" height="18" fill="rgb(30,31,34)"/>
+<line x1="339" y1="318" x2="343" y2="322" stroke="rgb(68,216,181)" stroke-width="2"/>
+<line x1="343" y1="322" x2="351" y2="312" stroke="rgb(68,216,181)" stroke-width="2"/>
+<text x="364" y="323" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Show stand labels</text>
+<rect x="336" y="341" width="18" height="18" fill="rgb(30,31,34)"/>
+<line x1="339" y1="350" x2="343" y2="354" stroke="rgb(68,216,181)" stroke-width="2"/>
+<line x1="343" y1="354" x2="351" y2="344" stroke="rgb(68,216,181)" stroke-width="2"/>
+<text x="364" y="355" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Show airport signs</text>
+<text x="336" y="387" font-family="Consolas,monospace" font-size="14" fill="rgb(147,158,165)">ORDERED TAXIWAYS / NODES</text>
+<rect x="336" y="398" width="524" height="32" fill="rgb(30,31,34)"/>
+<text x="346" y="419" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">A B #12 C</text>
+<rect x="336" y="448" width="110" height="32" fill="rgb(30,31,34)"/>
+<text x="351" y="469" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Pick nodes</text>
+<rect x="456" y="448" width="64" height="32" fill="rgb(30,31,34)"/>
+<text x="472" y="469" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Undo</text>
+<rect x="530" y="448" width="74" height="32" fill="rgb(30,31,34)"/>
+<text x="547" y="469" font-family="Consolas,monospace" font-size="14" fill="rgb(234,237,239)">Clear</text>
+<rect x="750" y="448" width="110" height="32" fill="rgb(68,216,181)"/>
+<text x="785" y="469" font-family="Consolas,monospace" font-size="14" fill="rgb(21,22,24)">Apply</text>
+</svg>

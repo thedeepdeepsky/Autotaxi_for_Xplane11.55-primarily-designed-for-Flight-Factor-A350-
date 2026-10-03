@@ -1,7 +1,10 @@
 #include "DsfLoader.h"
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <set>
 #include <sstream>
 namespace autotaxi {
 namespace {
@@ -33,23 +36,113 @@ int yellowStyle(const std::string &definition) {
         return 2; // display-only boundary/holding marking; never a taxi route
     return 0;
 }
-int parseText(const std::filesystem::path &text, Airport &airport) {
-    std::ifstream input(text);
-    if (!input)
-        return 0;
+bool pavedResource(const std::filesystem::path &pack, const std::string &resource,
+                   const std::set<std::string> &selected) {
+    if (selected.count(resource))
+        return true;
+    std::ifstream file(pack / std::filesystem::u8path(resource));
+    std::string surface, layer;
+    for (std::string row; std::getline(file, row);) {
+        std::istringstream input(row);
+        std::string token, value;
+        input >> token >> value;
+        if (token == "SURFACE")
+            surface = value;
+        if (token == "LAYER_GROUP")
+            layer = value;
+    }
+    return (surface == "asphalt" || surface == "concrete") && (layer == "taxiways" || layer == "runways");
+}
+struct DsfVertex {
+    GeoPoint point, incoming, outgoing;
+};
+std::vector<GeoPoint> sampleWinding(const std::vector<DsfVertex> &vertices, bool closed) {
+    if (vertices.empty())
+        return {};
+    std::vector<DsfVertex> knots;
+    for (const auto &vertex : vertices) {
+        // DSF repeats an anchor to encode independent incoming/outgoing handles.
+        if (!knots.empty() && distance(knots.back().point, vertex.point) < .001)
+            knots.back().outgoing = vertex.outgoing;
+        else
+            knots.push_back(vertex);
+    }
+    if (closed && knots.size() > 1 && distance(knots.front().point, knots.back().point) < .001) {
+        knots.front().incoming = knots.back().incoming;
+        knots.pop_back();
+    }
+    std::vector<GeoPoint> result{knots.front().point};
+    const std::size_t segments = closed ? knots.size() : knots.size() - 1;
+    for (std::size_t i = 0; i < segments; ++i) {
+        const auto &a = knots[i], &b = knots[(i + 1) % knots.size()];
+        Vec2 end = project(a.point, b.point), c1 = project(a.point, a.outgoing),
+             c2 = project(a.point, b.incoming);
+        double extent = length(c1) + length(c2 - c1) + length(end - c2);
+        int count = std::clamp(static_cast<int>(std::ceil(extent / 3)), 1, 10000);
+        if (length(c1) < .001 && length(c2 - end) < .001)
+            count = 1;
+        for (int k = 1; k <= count; ++k) {
+            double t = static_cast<double>(k) / count, u = 1 - t;
+            result.push_back(k == count ? b.point
+                                        : unproject(a.point, c1 * (3 * u * u * t) + c2 * (3 * u * t * t) +
+                                                                 end * (t * t * t)));
+        }
+    }
+    return result;
+}
+} // namespace
+DsfLoadResult parseDsfGeometry(std::istream &input, Airport &airport,
+                               const std::filesystem::path &sceneryPack,
+                               const std::string &pavementResources) {
+    DsfLoadResult result;
+    std::set<std::string> selected;
+    std::istringstream resources(pavementResources);
+    for (std::string name; std::getline(resources, name, ';');) {
+        auto first = name.find_first_not_of(" \t"), last = name.find_last_not_of(" \t");
+        if (first != std::string::npos)
+            selected.insert(name.substr(first, last - first + 1));
+    }
     std::vector<std::string> definitions;
+    std::vector<bool> paved;
     std::string definition;
-    std::vector<GeoPoint> points;
-    int active = -1, lines = 0;
+    std::vector<DsfVertex> points;
+    std::vector<std::vector<GeoPoint>> rings;
+    int active = -1;
+    int dimensions = 0, parameter = 0;
+    bool curved = false, closed = false;
+    bool malformed = false;
+    auto endWinding = [&] {
+        if (!points.empty()) {
+            rings.push_back(sampleWinding(points, closed));
+            points.clear();
+        }
+    };
     auto finish = [&] {
+        endWinding();
         int style = active >= 0 && static_cast<std::size_t>(active) < definitions.size()
                         ? yellowStyle(definitions[active])
                         : 0;
-        if (style && points.size() >= 2) {
-            airport.groundLines.push_back({style, "DSF " + definitions[active], std::move(points)});
-            ++lines;
+        if (!malformed && style) {
+            for (auto &ring : rings)
+                if (ring.size() >= 2) {
+                    airport.groundLines.push_back({style, "DSF " + definitions[active], std::move(ring)});
+                    ++result.lines;
+                }
+        } else if (!malformed && active >= 0 && static_cast<std::size_t>(active) < definitions.size() &&
+                   std::filesystem::path(definitions[active]).extension() == ".pol" && !rings.empty() &&
+                   std::all_of(rings.begin(), rings.end(),
+                               [](const auto &ring) { return ring.size() >= 3; })) {
+            Pavement polygon{rings, "DSF " + definitions[active]};
+            airport.sceneryContours.push_back(polygon);
+            ++result.contours;
+            if (paved[active]) {
+                airport.pavements.push_back(std::move(polygon));
+                ++result.pavements;
+            }
         }
+        rings.clear();
         points.clear();
+        malformed = false;
     };
     for (std::string row; std::getline(input, row);) {
         std::istringstream record(row);
@@ -58,26 +151,55 @@ int parseText(const std::filesystem::path &text, Airport &airport) {
         if (command == "POLYGON_DEF") {
             std::getline(record >> std::ws, definition);
             definitions.push_back(definition);
+            paved.push_back(pavedResource(sceneryPack, definition, selected));
         } else if (command == "BEGIN_POLYGON") {
+            if (active >= 0)
+                malformed = true;
             finish();
-            int index = -1, parameter = 0, dimensions = 0;
+            int index = -1;
+            parameter = dimensions = 0;
             record >> index >> parameter >> dimensions;
             active = index;
+            malformed = !record || dimensions < 2 || dimensions > 64 || index < 0 ||
+                        static_cast<std::size_t>(index) >= definitions.size();
+            curved = closed = false;
+            if (!malformed) {
+                auto extension = std::filesystem::path(definitions[index]).extension();
+                if (extension == ".lin") {
+                    malformed = (dimensions != 2 && dimensions != 4) || (parameter != 0 && parameter != 1);
+                    curved = dimensions == 4;
+                    closed = parameter == 1;
+                } else if (extension == ".pol") {
+                    curved = parameter == 65535 ? dimensions == 8 : dimensions == 4;
+                    closed = true;
+                }
+            }
+        } else if (command == "BEGIN_WINDING" || command == "END_WINDING") {
+            endWinding();
         } else if (command == "POLYGON_POINT" && active >= 0) {
-            GeoPoint point;
-            if (record >> point.lon >> point.lat && valid(point))
-                points.push_back(point);
+            if (malformed)
+                continue;
+            std::vector<double> coordinates(dimensions);
+            for (double &coordinate : coordinates)
+                if (!(record >> coordinate) || !std::isfinite(coordinate))
+                    malformed = true;
+            GeoPoint point{coordinates[1], coordinates[0]};
+            GeoPoint control = curved ? GeoPoint{coordinates[3], coordinates[2]} : point;
+            if (malformed || !valid(point) || !valid(control)) {
+                malformed = true;
+                continue;
+            }
+            points.push_back({point, unproject(point, project(point, control) * -1), control});
         } else if (command == "END_POLYGON") {
             finish();
             active = -1;
         }
     }
-    finish();
-    return lines;
+    // Unterminated polygons must not create navigable shortcuts.
+    return result;
 }
-} // namespace
 DsfLoadResult loadDsfPaintedLines(Airport &airport, const std::filesystem::path &simulatorRoot,
-                                  const std::string &toolPath) {
+                                  const std::string &toolPath, const std::string &pavementResources) {
     DsfLoadResult result;
     auto tile = airportTile(airport);
     if (tile.empty() || airport.source.empty()) {
@@ -108,10 +230,16 @@ DsfLoadResult loadDsfPaintedLines(Airport &airport, const std::filesystem::path 
         return result;
     }
     result.files = 1;
-    result.lines = parseText(text, airport);
+    std::ifstream converted(text);
+    result = parseDsfGeometry(converted, airport, sceneryPack, pavementResources);
+    result.files = 1;
+    converted.close();
     std::error_code error;
     std::filesystem::remove(text, error);
-    result.message = result.lines ? "DSF yellow marking lines loaded" : "DSF has no supported yellow lines";
+    result.message = "DSF: " + std::to_string(result.lines) + " marking chains, " +
+                     std::to_string(result.pavements) + " identified paved polygons, " +
+                     std::to_string(result.contours) + " polygon contours; surface coverage incomplete";
+    airport.dsfStatus = result.message;
     return result;
 }
 } // namespace autotaxi

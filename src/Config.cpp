@@ -50,6 +50,28 @@ Config loadConfig(const std::filesystem::path &path) {
     text("left_brake_dataref", c.leftBrakeDataref);
     text("right_brake_dataref", c.rightBrakeDataref);
     text("dsf_tool_path", c.dsfToolPath);
+    text("dsf_pavement_resources", c.dsfPavementResources);
+    text("latitude_dataref", c.latitudeDataref);
+    text("longitude_dataref", c.longitudeDataref);
+    text("heading_dataref", c.headingDataref);
+    text("groundspeed_dataref", c.speedDataref);
+    text("on_ground_dataref", c.onGroundDataref);
+    text("parking_brake_dataref", c.parkingBrakeDataref);
+    auto index = [&](const char *key, int &target) {
+        double value = target;
+        numeric(key, value, -1, 31);
+        if (value != std::floor(value))
+            throw std::runtime_error(std::string(key) + " must be integer");
+        target = static_cast<int>(value);
+    };
+    index("left_brake_index", c.leftBrakeIndex);
+    index("right_brake_index", c.rightBrakeIndex);
+    index("parking_brake_index", c.parkingBrakeIndex);
+    numeric("brake_scale", c.brakeScale, .001, 100);
+    numeric("parking_brake_set", c.parkingBrakeSet, -100, 100);
+    numeric("parking_brake_released", c.parkingBrakeReleased, -100, 100);
+    if (c.parkingBrakeSet == c.parkingBrakeReleased)
+        throw std::runtime_error("Parking brake set/released values must differ");
     double idx = c.steeringIndex;
     numeric("steering_index", idx, -1, 9);
     if (idx != std::floor(idx))
@@ -64,17 +86,36 @@ Config loadConfig(const std::filesystem::path &path) {
     numeric("steering_sign", c.steeringSign, -1, 1);
     if (c.steeringSign != 1 && c.steeringSign != -1)
         throw std::runtime_error("steering_sign must be 1 or -1");
-    numeric("wheelbase_m", c.controller.wheelbase, 5, 45);
+    numeric("wheelbase_m", c.controller.wheelbase, 1, 65);
     numeric("main_axle_aft_m", c.controller.mainAxleAft, -10, 20);
+    numeric("cockpit_ahead_nose_m", c.controller.cockpitAheadNose, 0, 8);
+    numeric("main_gear_half_track_m", c.controller.mainGearHalfTrack, .3, 20);
+    numeric("main_gear_half_span_m", c.route.mainGearHalfSpan, .3, 20);
+    numeric("wheel_edge_margin_m", c.route.wheelEdgeMargin, 0, 10);
+    numeric("tracking_allowance_m", c.route.trackingAllowance, .1, 10);
+    numeric("max_oversteer_m", c.route.maxOversteer, 0, 30);
     numeric("max_steer_deg", c.controller.maxSteer, 5, 70);
     numeric("steer_rate_deg_s", c.controller.steerRate, 1, 40);
     double speed = c.controller.taxiSpeed / 0.514444;
-    numeric("taxi_speed_kt", speed, 2, 20);
+    double maximum = c.controller.maxTaxiSpeed / .514444;
+    numeric("max_taxi_speed_kt", maximum, 2, 100);
+    c.controller.maxTaxiSpeed = maximum * .514444;
+    numeric("taxi_speed_kt", speed, 1, maximum);
+    if (speed > maximum)
+        throw std::runtime_error("taxi_speed_kt exceeds max_taxi_speed_kt");
     c.controller.taxiSpeed = speed * 0.514444;
     speed = c.controller.turnSpeed / 0.514444;
-    numeric("turn_speed_kt", speed, 1, 5);
+    numeric("turn_speed_kt", speed, .5, maximum);
     c.controller.turnSpeed = speed * 0.514444;
-    numeric("max_throttle", c.controller.maxThrottle, 0.02, 0.3);
+    speed = c.controller.apronSpeed / .514444;
+    numeric("apron_speed_kt", speed, .5, maximum);
+    c.controller.apronSpeed = speed * .514444;
+    numeric("apron_approach_distance_m", c.controller.apronApproachDistance, 30, 1000);
+    numeric("nominal_acceleration_m_s2", c.controller.acceleration, .01, 3);
+    numeric("planned_deceleration_m_s2", c.controller.deceleration, .05, 5);
+    numeric("nominal_brake_authority_m_s2", c.controller.brakeAuthority, .1, 8);
+    numeric("max_brake_ratio", c.controller.maxBrake, .1, 1);
+    numeric("emergency_brake_ratio", c.controller.emergencyBrake, .1, 1);
     numeric("max_cross_track_m", c.controller.maxCrossTrack, 3, 20);
     numeric("feedback_timeout_s", c.feedbackTimeout, 1, 15);
     double unknown = 1;
@@ -83,9 +124,34 @@ Config loadConfig(const std::filesystem::path &path) {
     double intersections = 0;
     numeric("allow_intersection_departure", intersections, 0, 1);
     c.route.allowIntersectionDeparture = intersections == 1;
-    c.route.minimumTurnRadius =
-        std::max(20.0, 1.4 * c.controller.wheelbase / std::tan(c.controller.maxSteer * rad));
-    double require = 1;
+    // The default geometric floor follows the main-gear track.  The actual
+    // nose-wheel steering limit is checked separately by turnClearance().
+    c.route.minimumTurnRadius = std::max(2.0, 2.0 * c.controller.mainGearHalfTrack);
+    numeric("minimum_turn_radius_m", c.route.minimumTurnRadius, 2, 150);
+    c.route.wheelbase = c.controller.wheelbase;
+    c.route.cockpitAheadNose = c.controller.cockpitAheadNose;
+    c.route.mainAxleAft = c.controller.mainAxleAft;
+    c.route.maxSteer = c.controller.maxSteer;
+    std::string width(1, c.route.minimumWidth);
+    text("minimum_width_class", width);
+    if (width.size() != 1 || width[0] < 'A' || width[0] > 'F')
+        throw std::runtime_error("minimum_width_class must be A..F");
+    c.route.minimumWidth = width[0];
+    auto boolean = [&](const char *key, bool &target) {
+        double value = target ? 1 : 0;
+        numeric(key, value, 0, 1);
+        if (value != 0 && value != 1)
+            throw std::runtime_error(std::string(key) + " must be 0 or 1");
+        target = value == 1;
+    };
+    boolean("allow_oversteer", c.route.allowOversteer);
+    boolean("ignore_pavement_limits", c.route.ignorePavementLimits);
+    boolean("ignore_stand_size", c.route.ignoreStandSize);
+    boolean("painted_runway_exits_only", c.route.paintedRunwayExitsOnly);
+    std::string via;
+    text("route_via", via);
+    c.route.via = parseRouteVia(via);
+    double require = 0;
     numeric("require_a350", require, 0, 1);
     c.requireA350 = require == 1;
     double automatic = 1;

@@ -40,15 +40,15 @@ class ControlAdapter {
 
   private:
     NumericRef lat_, lon_, heading_, speed_, ground_, park_, ffPark_, left_, right_, steer_, feedback_;
-    XPLMDataRef wheelOverride_ = nullptr, throttleOverride_ = nullptr, brakeOverride_ = nullptr;
-    XPLMDataRef steerOn_ = nullptr, throttle_ = nullptr, icao_ = nullptr;
+    XPLMDataRef wheelOverride_ = nullptr, brakeOverride_ = nullptr;
+    XPLMDataRef steerOn_ = nullptr, icao_ = nullptr;
     Config config_;
-    std::string throttleSource_;
-    bool owned_ = false, stopping_ = false, useThrottleOverride_ = false, useBrakeOverride_ = false;
+    bool owned_ = false, stopping_ = false, useBrakeOverride_ = false;
+    bool emergencyHeld_ = false;
     bool ownWheelOverride_ = false, ownBrakeOverride_ = false;
-    int savedSteerOn_ = 0, engines_ = 2, throttleType_ = 0;
+    int savedSteerOn_ = 0;
     double previousLeft_ = 0, previousRight_ = 0, previousSteer_ = 0;
     double command_ = 0, mismatch_ = 0, stoppedTime_ = 0, stalledTime_ = 0, lastTarget_ = 0;
-    void writeThrottle(double value);
+    double parkingRatio() const;
 };
 } // namespace autotaxi
